@@ -111,8 +111,54 @@ class CRN(nn.Module):
 
         return d_5
 
+class MiniCRN(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 16, (3,2), stride=(2,1), padding=(1,0))
+        self.conv2 = nn.Conv2d(16, 32, (3,2), stride=(2,1), padding=(1,0))
+        self.conv3 = nn.Conv2d(32, 64, (3,2), stride=(2,1), padding=(1,0))
+        self.norm1 = nn.GroupNorm(1, 16)
+        self.norm2 = nn.GroupNorm(1, 32)
+        self.norm3 = nn.GroupNorm(1, 64)
+        self.act = nn.ELU()
+
+        self.lstm = None  # 延後初始化
+        self.hidden_size = 128  # for reshape
+
+        self.deconv1 = nn.ConvTranspose2d(128, 64, (3,2), stride=(2,1))
+        self.deconv2 = nn.ConvTranspose2d(64, 32, (3,2), stride=(2,1))
+        self.deconv3 = nn.ConvTranspose2d(32, 16, (3,2), stride=(2,1))
+        self.deconv4 = nn.ConvTranspose2d(16, 1, (3,2), stride=(2,1))
+        
+
+    def forward(self, x):
+        e1 = self.act(self.norm1(self.conv1(x)))
+        e2 = self.act(self.norm2(self.conv2(e1)))
+        e3 = self.act(self.norm3(self.conv3(e2)))
+
+        b, c, f, t = e3.shape
+        feat_dim = c * f
+
+        # ⚡ LSTM 動態初始化（只第一次執行）
+        if self.lstm is None:
+            self.lstm = nn.LSTM(input_size=feat_dim, hidden_size=self.hidden_size, num_layers=1, batch_first=True)
+            if next(self.parameters()).is_cuda:
+                self.lstm = self.lstm.cuda()
+
+        # [B, C, F, T] → [B, T, C×F]
+        lstm_in = e3.reshape(b, c*f, t).permute(0, 2, 1)
+        lstm_out, _ = self.lstm(lstm_in)  # [B, T, hidden_size]
+        lstm_out = lstm_out.permute(0, 2, 1).unsqueeze(2)  # [B, hidden_size, 1, T]
+        
+        d1 = self.act(self.deconv1(lstm_out))
+        d2 = self.act(self.deconv2(d1))
+        d3 = self.act(self.deconv3(d2))
+        out = torch.relu(self.deconv4(d3))
+        return out
+
+
 
 if __name__ == '__main__':
-    layer = CRN()
-    a = torch.rand(2, 1, 161, 200)
+    layer = MiniCRN()
+    a = torch.rand(2, 1, 51, 200)
     print(layer(a).shape)
