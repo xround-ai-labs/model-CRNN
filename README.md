@@ -13,7 +13,7 @@ A minimum unofficial implementation of the [A Convolutional Recurrent Neural Net
 Training:
 
 ```
-python train.py -C config/train/baseline_model.json5
+python train.py -C config/train/vctk_model.json5
 ```
 
 Inference:

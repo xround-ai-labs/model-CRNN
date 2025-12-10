@@ -6,9 +6,11 @@ import numpy as np
 import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader
+from datetime import datetime
 
 from util.utils import initialize_config
 
+today = datetime.now().strftime("%Y%m%d")
 
 def main(config, resume):
     # Random seed for both CPU and GPU.
@@ -61,6 +63,20 @@ def main(config, resume):
         lr=config["optimizer"]["lr"],
         betas=(config["optimizer"]["beta1"], config["optimizer"]["beta2"])
     )
+
+    # === 動態設定 checkpoint 儲存路徑 ===
+    if "trainer" in configuration and "args" in configuration["trainer"]:
+        base_dir = configuration["trainer"]["args"].get("save_dir", "./checkpoints")
+    else:
+        base_dir = "./checkpoints"
+
+    # 指定新的存放路徑: ./checkpoints/vctk_YYYYMMDD/
+    configuration["root_dir"] = os.path.join(base_dir, f"vctk_{today}")
+
+    # 確保資料夾存在
+    os.makedirs(configuration["root_dir"], exist_ok=True)
+
+    print(f"✅ 模型儲存路徑: {configuration['root_dir']}")
 
     loss_function = initialize_config(config["loss_function"])
     trainer_class = initialize_config(config["trainer"], pass_args=False)

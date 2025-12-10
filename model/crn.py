@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class CausalConvBlock(nn.Module):
@@ -112,8 +113,12 @@ class CRN(nn.Module):
         return d_5
 
 class MiniCRN(nn.Module):
-    def __init__(self):
+    def __init__(self, n_fft=100):
         super().__init__()
+
+        self.n_fft = n_fft
+        self.freq_bins = n_fft // 2 + 1  # 🔸 最終輸出固定頻率點數
+        
         self.conv1 = nn.Conv2d(1, 16, (3,2), stride=(2,1), padding=(1,0))
         self.conv2 = nn.Conv2d(16, 32, (3,2), stride=(2,1), padding=(1,0))
         self.conv3 = nn.Conv2d(32, 64, (3,2), stride=(2,1), padding=(1,0))
@@ -125,10 +130,11 @@ class MiniCRN(nn.Module):
         self.lstm = None  # 延後初始化
         self.hidden_size = 128  # for reshape
 
-        self.deconv1 = nn.ConvTranspose2d(128, 64, (3,2), stride=(2,1))
-        self.deconv2 = nn.ConvTranspose2d(64, 32, (3,2), stride=(2,1))
-        self.deconv3 = nn.ConvTranspose2d(32, 16, (3,2), stride=(2,1))
-        self.deconv4 = nn.ConvTranspose2d(16, 1, (3,2), stride=(2,1))
+        self.deconv1 = nn.ConvTranspose2d(128, 64, (3,2), stride=(2,1), output_padding=(1,0))
+        self.deconv2 = nn.ConvTranspose2d(64, 32, (3,2), stride=(2,1), output_padding=(1,0))
+        self.deconv3 = nn.ConvTranspose2d(32, 16, (3,2), stride=(2,1), output_padding=(1,0))
+        self.deconv4 = nn.ConvTranspose2d(16, 1, (3,2), stride=(2,1), output_padding=(1,0))
+
         
 
     def forward(self, x):
@@ -154,11 +160,21 @@ class MiniCRN(nn.Module):
         d2 = self.act(self.deconv2(d1))
         d3 = self.act(self.deconv3(d2))
         out = torch.relu(self.deconv4(d3))
+
+        # ✅ 固定頻率點數 (n_fft//2 + 1)
+        f_out = out.size(2)
+        if f_out > self.freq_bins:
+            out = out[:, :, :self.freq_bins, :]
+        elif f_out < self.freq_bins:
+            pad_amt = self.freq_bins - f_out
+            out = F.pad(out, (0, 0, 0, pad_amt))  # pad on freq axis (dim=2)
         return out
 
 
 
-if __name__ == '__main__':
-    layer = MiniCRN()
-    a = torch.rand(2, 1, 51, 200)
-    print(layer(a).shape)
+if __name__ == "__main__":
+    model = MiniCRN(n_fft=100)
+    x = torch.randn(2, 1, 51, 200)
+    y = model(x)
+    print("input:", x.shape)
+    print("output:", y.shape)

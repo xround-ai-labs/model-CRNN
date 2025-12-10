@@ -61,11 +61,21 @@ class Trainer(BaseTrainer):
 
             enhanced_mag = self.model(noisy_mag)
 
-            loss_total += self.loss_function(clean_mag, enhanced_mag, [clean_mag.shape[-1], ], self.device).item()
+            loss_total += self.loss_function(enhanced_mag, clean_mag, [clean_mag.shape[-1]], self.device).item()
 
             enhanced_mag = enhanced_mag.squeeze(0).squeeze(0).detach().cpu().numpy()  # [1, 1, F, T] => [F, T]
+
+            # 🔧 對齊頻率與時間軸長度
+            min_F = min(enhanced_mag.shape[0], noisy_phase.shape[0])
+            min_T = min(enhanced_mag.shape[1], noisy_phase.shape[1])
+            enhanced_mag = enhanced_mag[:min_F, :min_T]
+            noisy_phase = noisy_phase[:min_F, :min_T]
+
+            # ISTFT 還原
             enhanced = librosa.istft(enhanced_mag * noisy_phase, hop_length=hop_length, win_length=win_length, length=len(noisy))
 
+
+            print("enhanced:", enhanced.shape, "clean:", clean.shape)
             assert len(noisy) == len(clean) == len(enhanced)
 
             if i <= np.min([visualization_limit, len(self.validation_dataloader)]):
