@@ -1,14 +1,14 @@
 {
     "model": {
         "module": "model.crn",
-        "main": "CRN",
+        "main": "MiniCRN",
         "args": {}
     },
     "dataset": {
         "module": "dataset.dataset_enhancement",
         "main": "Dataset",
         "args": {
-            "noisy_dataset": "~/Datasets/SEGAN_Dataset/noisy_testset_wav",
+            "noisy_dataset": "/home/user/Documents/ai-training/gtcrn/test_wavs/remixed_XR_24k/",
             "limit": null,
             "offset": 0,
             "sr": 16000
@@ -17,9 +17,9 @@
     "inference": {
         "module": "inferencer.inferencer",
         "main": "Inferencer",
-        "n_fft": 320,
-        "hop_length": 160,
-        "win_length": 320,
+        "n_fft": 100,
+        "hop_length": 25,
+        "win_length": 100,
         "sr": 16000,
         "inference_type": "full_band_no_truncation"
     }

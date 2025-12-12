@@ -106,3 +106,4 @@ venv.bak/
 .mypy_cache/
 
 /checkpoints
+/remixed_XR_24k_crnn_20251210

@@ -21,8 +21,8 @@ Inference:
 ```
 python inference.py \
     -C config/inference/basic.json5 \
-    -cp ~/Experiments/CRN/baseline_model/checkpoints/latest_model.tar \
-    -dist ./enhanced
+    -cp ./checkpoints/vctk_20251210/vctk_model/checkpoints/model_0500.pth \
+    -dist ./remixed_XR_24k_crnn_20251210
 ```
 
 Check out the README of [Wave-U-Net for SE](https://github.com/haoxiangsnr/Wave-U-Net-for-Speech-Enhancement) to learn more.
