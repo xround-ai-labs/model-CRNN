@@ -119,6 +119,7 @@ class MiniCRN(nn.Module):
         self.n_fft = n_fft
         self.freq_bins = n_fft // 2 + 1  # 🔸 最終輸出固定頻率點數
         
+        # ========== Encoder ==========
         self.conv1 = nn.Conv2d(1, 16, (3,2), stride=(2,1), padding=(1,0))
         self.conv2 = nn.Conv2d(16, 32, (3,2), stride=(2,1), padding=(1,0))
         self.conv3 = nn.Conv2d(32, 64, (3,2), stride=(2,1), padding=(1,0))
@@ -127,13 +128,19 @@ class MiniCRN(nn.Module):
         self.norm3 = nn.GroupNorm(1, 64)
         self.act = nn.ELU()
 
+        # ========== LSTM ==========
         self.lstm = None  # 延後初始化
         self.hidden_size = 128  # for reshape
 
+        # ========== Decoder ==========
         self.deconv1 = nn.ConvTranspose2d(128, 64, (3,2), stride=(2,1), output_padding=(1,0))
         self.deconv2 = nn.ConvTranspose2d(64, 32, (3,2), stride=(2,1), output_padding=(1,0))
         self.deconv3 = nn.ConvTranspose2d(32, 16, (3,2), stride=(2,1), output_padding=(1,0))
         self.deconv4 = nn.ConvTranspose2d(16, 1, (3,2), stride=(2,1), output_padding=(1,0))
+        
+        self.denorm1 = nn.GroupNorm(1, 64)
+        self.denorm2 = nn.GroupNorm(1, 32)
+        self.denorm3 = nn.GroupNorm(1, 16)
 
         
 
@@ -171,10 +178,157 @@ class MiniCRN(nn.Module):
         return out
 
 
+class MiniCRN_Causal(nn.Module):
+    def __init__(self, n_fft=100):
+        super().__init__()
+        self.freq_bins = n_fft // 2 + 1
+
+        # ===== Encoder (Causal) =====
+        self.enc1 = CausalConvBlock(1, 16)
+        self.enc2 = CausalConvBlock(16, 32)
+        self.enc3 = CausalConvBlock(32, 64)
+
+        # ===== LSTM =====
+        self.lstm = None
+        self.hidden_size = 64
+
+        # ===== Decoder (Causal) =====
+        self.dec1 = CausalTransConvBlock(64, 32)
+        self.dec2 = CausalTransConvBlock(32, 16)
+        self.dec3 = CausalTransConvBlock(16, 1, is_last=True)
+
+    def forward(self, x):
+        """
+        x: [B, 1, F, T]
+        """
+        e1 = self.enc1(x)
+        e2 = self.enc2(e1)
+        e3 = self.enc3(e2)   # [B, 64, F', T]
+
+        b, c, f, t = e3.shape
+        feat_dim = c * f
+
+        # 動態建立 LSTM（跟你原本 MiniCRN 一樣）
+        if self.lstm is None:
+            self.lstm = nn.LSTM(
+                input_size=feat_dim,
+                hidden_size=self.hidden_size,
+                num_layers=1,
+                batch_first=True
+            )
+            if x.is_cuda:
+                self.lstm = self.lstm.cuda()
+
+        lstm_in = e3.reshape(b, feat_dim, t).permute(0, 2, 1)
+        lstm_out, _ = self.lstm(lstm_in)
+        lstm_out = lstm_out.permute(0, 2, 1).reshape(b, self.hidden_size, 1, t)
+
+        d1 = self.dec1(lstm_out)
+        d2 = self.dec2(d1)
+        out = self.dec3(d2)
+
+        # 固定頻率點數
+        f_out = out.size(2)
+        if f_out > self.freq_bins:
+            out = out[:, :, :self.freq_bins, :]
+        elif f_out < self.freq_bins:
+            out = F.pad(out, (0, 0, 0, self.freq_bins - f_out))
+
+        return out
+
+class MiniCRN_Causal128(nn.Module):
+    def __init__(self, n_fft=100):
+        super().__init__()
+        self.freq_bins = n_fft // 2 + 1
+
+        lstm_size = 72
+
+        # ===== Encoder (Causal) =====
+        self.enc1 = CausalConvBlock(1, 16)
+        self.enc2 = CausalConvBlock(16, 24)
+        self.enc3 = CausalConvBlock(24, 48)
+        self.enc4 = CausalConvBlock(48, lstm_size)
+
+        # ===== LSTM =====
+        self.hidden_size = lstm_size
+        self.num_lstm_layers = 3
+
+        # ===== Auto infer encoder output freq =====
+        with torch.no_grad():
+            dummy = torch.zeros(1, 1, self.freq_bins, 8)
+            e = self.enc4(self.enc3(self.enc2(self.enc1(dummy))))
+            self.enc_out_freq = e.shape[2]   # ← 自動推斷
+
+        # 固定 input_size
+        feat_dim = lstm_size * self.enc_out_freq
+
+        self.lstm = nn.LSTM(
+            input_size=feat_dim,
+            hidden_size=self.hidden_size,
+            num_layers=self.num_lstm_layers,
+            batch_first=True
+        )
+
+        # ===== Decoder (Causal) =====
+        self.dec1 = CausalTransConvBlock(lstm_size, 48)   # 注意：Decoder 第一層 input 要接 LSTM hidden_size
+        self.dec2 = CausalTransConvBlock(48, 24)
+        self.dec3 = CausalTransConvBlock(24, 1, is_last=True)
+
+    def forward(self, x):
+        """
+        x: [B, 1, F, T]
+        """
+        e1 = self.enc1(x)
+        e2 = self.enc2(e1)
+        e3 = self.enc3(e2)
+        e4 = self.enc4(e3) # [B, 64, F', T]
+
+        b, c, f, t = e4.shape
+
+        # ===== 保護性檢查 =====
+        assert f == self.enc_out_freq, \
+            f"Encoder freq mismatch: expect {self.enc_out_freq}, got {f}"
+
+        # [B, C, F, T] → [B, T, C*F]
+        lstm_in = e4.reshape(b, c * f, t).permute(0, 2, 1)
+
+        lstm_out, _ = self.lstm(lstm_in)
+
+        # [B, T, 128] → [B, 128, 1, T]
+        lstm_out = lstm_out.permute(0, 2, 1).unsqueeze(2)
+
+        d1 = self.dec1(lstm_out)
+        d2 = self.dec2(d1)
+        out = self.dec3(d2)
+
+        # ===== Fix frequency bins =====
+        f_out = out.size(2)
+        if f_out > self.freq_bins:
+            out = out[:, :, :self.freq_bins, :]
+        elif f_out < self.freq_bins:
+            out = F.pad(
+                out,
+                (0, 0, 0, self.freq_bins - f_out),
+                mode="constant",
+                value=0.0,   # 明確指定
+            )
+
+        return out
 
 if __name__ == "__main__":
-    model = MiniCRN(n_fft=100)
+    model = MiniCRN_Causal128(n_fft=100)
     x = torch.randn(2, 1, 51, 200)
     y = model(x)
     print("input:", x.shape)
     print("output:", y.shape)
+
+    with torch.no_grad():
+        x = torch.randn(2, 1, 51, 200)
+        e4 = model.enc4(model.enc3(model.enc2(model.enc1(x))))
+        print(e4.shape)  # 看 F'
+
+    if model.lstm is not None:
+        print("LSTM layers :", model.lstm.num_layers)
+        print("LSTM hidden :", model.lstm.hidden_size)
+        print("LSTM input  :", model.lstm.input_size)
+

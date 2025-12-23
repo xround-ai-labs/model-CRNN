@@ -26,8 +26,9 @@ def full_band_no_truncation(model, device, inference_args, noisy, sr=24000):
 
     # === 模型推論 ===
     noisy_mag_tensor = torch.tensor(noisy_mag, device=device, dtype=torch.float32).unsqueeze(0).unsqueeze(0)  # [F,T]→[1,1,F,T]
-    with torch.no_grad():
-        enhanced_mag_tensor = model(noisy_mag_tensor)
+    #with torch.no_grad():
+        #enhanced_mag_tensor = model(noisy_mag_tensor)
+    enhanced_mag_tensor = noisy_mag_tensor  # 暫時不經過模型，直接輸出原始頻譜以測試流程
     enhanced_mag = enhanced_mag_tensor.squeeze(0).squeeze(0).detach().cpu().numpy()  # [1,1,F,T]→[F,T]
 
     # === 對齊頻譜時間長度 ===

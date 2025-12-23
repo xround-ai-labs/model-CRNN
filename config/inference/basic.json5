@@ -1,7 +1,7 @@
 {
     "model": {
         "module": "model.crn",
-        "main": "MiniCRN",
+        "main": "MiniCRN_Causal128",
         "args": {}
     },
     "dataset": {

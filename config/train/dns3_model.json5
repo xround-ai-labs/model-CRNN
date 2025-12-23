@@ -1,7 +1,7 @@
 {
     "seed": 0,
     "description": "null",
-    "root_dir": "./checkpoints/vctk",
+    "root_dir": "./checkpoints/dns3",
     "cudnn_deterministic": false,
     "trainer": {
         "module": "trainer.causal_trainer",
@@ -35,26 +35,26 @@
         "beta2": 0.999
     },
     "train_dataset": {
-        "module": "dataset.vctk_dataset_loader",
+        "module": "dataset.dns3_dataset_loader",
         "main": "Dataset",
         "args": {
-            "dataset_list": "./dataset_lists/train_vctk_pairs.txt",
+            "dataset_list": "./dataset_lists/train_dns3_pairs.txt",
             "limit": null,
             "offset": 0,
-            "sr": 16000,
+            "sr": 24000,
             "n_fft": 100,
             "hop_length": 25,
             "train": true
         }
     },
     "validation_dataset": {
-        "module": "dataset.vctk_dataset_loader",
+        "module": "dataset.dns3_dataset_loader",
         "main": "Dataset",
         "args": {
-            "dataset_list": "./dataset_lists/val_vctk_pairs.txt",
+            "dataset_list": "./dataset_lists/val_dns3_pairs.txt",
             "limit": null,
             "offset": 0,
-            "sr": 16000,
+            "sr": 24000,
             "n_fft": 100,
             "hop_length": 25,
             "train": false
