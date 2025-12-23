@@ -107,3 +107,12 @@ venv.bak/
 
 /checkpoints
 /remixed_XR_24k_crnn_20251210
+/result
+/dataset_lists
+
+*.onnx
+*.onnx.data
+*.tflite
+*.pb
+*.index
+MiniCRN_Causal128_tf/variables/variables.data-00000-of-00001

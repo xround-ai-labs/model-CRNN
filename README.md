@@ -10,22 +10,75 @@ A minimum unofficial implementation of the [A Convolutional Recurrent Neural Net
 
 ## Usage
 
-Training:
+- Training:
 
 ```
 python train.py -C config/train/vctk_model.json5
 ```
+```
+python train.py -C config/train/dns3_model.json5
+```
 
-Inference:
+- Inference:
 
 ```
 python inference.py \
     -C config/inference/basic.json5 \
-    -cp ./checkpoints/vctk_20251210/vctk_model/checkpoints/model_0500.pth \
-    -dist ./remixed_XR_24k_crnn_20251210
+    -cp ./checkpoints/vctk_20251218/vctk_model/checkpoints/model_0500.pth \
+    -dist ./result/remixed_XR_24k_crnn_20251218
 ```
 
 Check out the README of [Wave-U-Net for SE](https://github.com/haoxiangsnr/Wave-U-Net-for-Speech-Enhancement) to learn more.
+
+- TensorBoard:
+```
+tensorboard --logdir=checkpoints/vctk_20251218/vctk_model/logs
+```
+
+## PyTorch -> ONNX -> TFLite
+
+- PyTorch → ONNX → TF:
+
+```
+conda create -n onnx python=3.10 -y
+conda activate onnx
+
+pip install torch==2.1.2
+pip install onnx==1.14.1
+pip install onnx-tf==1.10.0
+
+
+pip install torch==2.3.0
+pip install onnx==1.16.0
+pip install onnx-tf==1.10.0
+pip install tensorflow==2.15.0
+pip install numpy
+```
+
+```
+TORCH_ONNX_USE_EXPERIMENTAL_EXPORTER=0 python export_minicrn_causal128_onnx.py
+
+
+onnx-tf convert \
+  -i MiniCRN_Causal128.onnx \
+  -o MiniCRN_Causal128_tf
+```
+
+- TF → TFLite:
+```
+conda create -n tf2tflite python=3.10 -y
+conda activate tf2tflite
+
+
+pip install \
+  tensorflow==2.15.0 \
+  numpy==1.26.4
+
+
+python export_minicrn_causal128_tflite.py
+
+```
+
 
 ## Performance
 
