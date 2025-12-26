@@ -294,12 +294,26 @@ class MiniCRN_Causal128(nn.Module):
 
         lstm_out, _ = self.lstm(lstm_in)
 
+        lstm_out = torch.nan_to_num(
+            lstm_out,
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0
+        )
+
         # [B, T, 128] → [B, 128, 1, T]
         lstm_out = lstm_out.permute(0, 2, 1).unsqueeze(2)
 
         d1 = self.dec1(lstm_out)
         d2 = self.dec2(d1)
         out = self.dec3(d2)
+
+        out = torch.nan_to_num(
+            out,
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0
+        )
 
         # ===== Fix frequency bins =====
         f_out = out.size(2)

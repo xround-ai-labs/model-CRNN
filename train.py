@@ -70,8 +70,8 @@ def main(config, resume):
     else:
         base_dir = "./checkpoints"
 
-    # 指定新的存放路徑: ./checkpoints/vctk_YYYYMMDD/
-    configuration["root_dir"] = os.path.join(base_dir, f"vctk_{today}")
+    # 指定新的存放路徑: ./checkpoints/dns3_YYYYMMDD/
+    configuration["root_dir"] = os.path.join(base_dir, f"dns3_{today}")
 
     # 確保資料夾存在
     os.makedirs(configuration["root_dir"], exist_ok=True)

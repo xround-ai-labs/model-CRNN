@@ -28,6 +28,12 @@ class Trainer(BaseTrainer):
 
             loss = self.loss_function(enhanced, clean, n_frames_list, self.device)
             loss.backward()
+
+            torch.nn.utils.clip_grad_norm_(
+                self.model.parameters(),
+                max_norm=5.0
+            )
+
             self.optimizer.step()
             loss_total += loss.item()
 
