@@ -10,16 +10,38 @@ from util.utils import initialize_config, prepare_device, prepare_empty_dir
 
 
 class BaseInferencer:
+
+    checkpoint_path: str
+    output_dir: str
+    config: dict
+
     def __init__(self, config, checkpoint_path, output_dir):
         checkpoint_path = Path(checkpoint_path).expanduser().absolute()
         output_root_dir = Path(output_dir).expanduser().absolute()
         self.device = prepare_device(torch.cuda.device_count())
 
+        self.checkpoint_path = checkpoint_path.as_posix()
+        self.output_dir = output_root_dir.as_posix()
+        self.config = config
+
         self.enhanced_dir = output_root_dir
         prepare_empty_dir([self.enhanced_dir])
 
         self.dataloader = self._load_dataloader(config["dataset"])
-        self.model = self._load_model(config["model"], checkpoint_path, self.device)
+
+        inference_type = config["inference"]["inference_type"]
+
+        if inference_type.startswith("tflite"):
+            # TFLite backend：不載入 PyTorch model
+            self.model = None
+            print("ℹ️ TFLite inference selected, skip PyTorch model loading.")
+        else:
+            self.model = self._load_model(
+                config["model"],
+                checkpoint_path,
+                self.device
+            )
+
         self.inference_config = config["inference"]
 
         print("Configurations are as follows: ")

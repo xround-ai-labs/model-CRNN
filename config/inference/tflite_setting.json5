@@ -21,6 +21,6 @@
         "hop_length": 25,
         "win_length": 100,
         "sr": 24000,
-        "inference_type": "full_band_no_truncationfull_band_no_truncation"
+        "inference_type": "tflite_full_band_no_truncation"
     }
 }

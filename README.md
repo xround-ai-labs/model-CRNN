@@ -24,15 +24,22 @@ python train.py -C config/train/dns3_model.json5
 ```
 python inference.py \
     -C config/inference/basic.json5 \
-    -cp ./checkpoints/vctk_20251218/vctk_model/checkpoints/model_0500.pth \
-    -dist ./result/remixed_XR_24k_crnn_20251218
+    -cp ./checkpoints/dns3_20251229/dns3_model/checkpoints/model_0030.pth \
+    -dist ./result/remixed_XR_24k_crnn_20251230
+```
+
+```
+python inference.py \
+    -C config/inference/tflite_setting.json5 \
+    -cp ./MiniCRN_Causal128.tflite \
+    -dist ./result/remixed_XR_24k_crnn_tflite
 ```
 
 Check out the README of [Wave-U-Net for SE](https://github.com/haoxiangsnr/Wave-U-Net-for-Speech-Enhancement) to learn more.
 
 - TensorBoard:
 ```
-tensorboard --logdir=checkpoints/vctk_20251218/vctk_model/logs
+tensorboard --logdir=checkpoints/dns3_20251229/dns3_model/logs
 ```
 
 ## PyTorch -> ONNX -> TFLite

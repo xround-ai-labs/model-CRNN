@@ -274,7 +274,7 @@ class MiniCRN_Causal128(nn.Module):
         self.dec2 = CausalTransConvBlock(48, 24)
         self.dec3 = CausalTransConvBlock(24, 1, is_last=True)
 
-    def forward(self, x):
+    def forward(self, x, lstm_state=None):
         """
         x: [B, 1, F, T]
         """
@@ -292,6 +292,10 @@ class MiniCRN_Causal128(nn.Module):
         # [B, C, F, T] → [B, T, C*F]
         lstm_in = e4.reshape(b, c * f, t).permute(0, 2, 1)
 
+        if lstm_state is None:
+            lstm_out, lstm_state = self.lstm(lstm_in)
+        else:
+            lstm_out, lstm_state = self.lstm(lstm_in, lstm_state)
         lstm_out, _ = self.lstm(lstm_in)
 
         lstm_out = torch.nan_to_num(
@@ -327,7 +331,7 @@ class MiniCRN_Causal128(nn.Module):
                 value=0.0,   # 明確指定
             )
 
-        return out
+        return out, lstm_state
 
 if __name__ == "__main__":
     model = MiniCRN_Causal128(n_fft=100)

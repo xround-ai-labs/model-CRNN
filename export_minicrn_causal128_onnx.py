@@ -24,8 +24,13 @@ onnx-tf convert \
 import torch
 from model.crn import MiniCRN_Causal128
 
+PTH_PATH = "/home/user/Documents/ai-training/model-CRNN/checkpoints/dns3_20251229/dns3_model/checkpoints/model_0048.pth"
+ONNX_PATH = "MiniCRN_Causal128.onnx"
+
 def main():
     model = MiniCRN_Causal128(n_fft=100)
+    state = torch.load(PTH_PATH, map_location="cpu")
+    model.load_state_dict(state)
     model.eval()
 
     # 固定輸入 shape（TFLite 不支援真正 dynamic）
@@ -34,7 +39,7 @@ def main():
     torch.onnx.export(
         model,
         dummy,
-        "MiniCRN_Causal128.onnx",
+        ONNX_PATH,
         opset_version=11,
         input_names=["input"],
         output_names=["output"],

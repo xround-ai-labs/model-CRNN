@@ -2,6 +2,7 @@ import os
 
 import librosa
 from torch.utils import data
+import soundfile as sf
 
 
 class Dataset(data.Dataset):
@@ -39,6 +40,15 @@ class Dataset(data.Dataset):
 
     def __getitem__(self, item):
         noisy_path = self.noisy_wav_files[item]
+
+        # 只讀 header，拿到真實 sr
+        info = sf.info(noisy_path)
+        sr = info.samplerate
+
+        # 讀 waveform（不重採樣）
+        noisy, _ = librosa.load(noisy_path, sr=None)
+
         name = os.path.splitext(os.path.basename(noisy_path))[0]
-        noisy, _ = librosa.load(noisy_path, sr=self.sr)
-        return noisy, name
+
+        # 回傳「路徑」或「sr」，Inferencer 才能判斷
+        return noisy, noisy_path, sr

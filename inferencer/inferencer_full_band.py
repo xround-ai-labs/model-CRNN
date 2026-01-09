@@ -11,7 +11,7 @@ def full_band_no_truncation(model, device, inference_args, noisy, sr=24000):
     n_fft = inference_args["n_fft"]
     hop_length = inference_args["hop_length"]
     win_length = inference_args["win_length"]
-    target_sr = 16000
+    target_sr = 24000
 
     # === 若取樣率不是 16 kHz，自動重採樣 ===
     if sr != target_sr:

@@ -47,7 +47,8 @@ class Trainer(BaseTrainer):
             loss_function=self.loss_function,
             device=self.device,
             inference_args=self.validation_custom_config,
-            enhanced_dir=None
+            enhanced_dir=None,
+            checkpoint_path=None
         )
 
         self.writer.add_scalar(f"Validation/Loss", loss, epoch)
