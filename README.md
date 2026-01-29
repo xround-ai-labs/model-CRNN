@@ -39,7 +39,12 @@ Check out the README of [Wave-U-Net for SE](https://github.com/haoxiangsnr/Wave-
 
 - TensorBoard:
 ```
-tensorboard --logdir=checkpoints/dns3_20251229/dns3_model/logs
+conda activate tb
+tensorboard --logdir=checkpoints_tf/20260128-181411
+```
+```
+conda activate crnn
+tensorboard --logdir=logs/tbptt_20260116-172400/
 ```
 
 ## PyTorch -> ONNX -> TFLite

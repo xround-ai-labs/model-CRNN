@@ -116,3 +116,4 @@ venv.bak/
 *.pb
 *.index
 MiniCRN_Causal128_tf/variables/variables.data-00000-of-00001
+checkpoints_tf
