@@ -50,7 +50,7 @@ HOP_SAMPLES = CHUNK_HOP_FRAMES * HOP_LENGTH
 
 # ===================== Training ==============================
 EPOCHS = 50
-LEARNING_RATE = 1e-3
+LEARNING_RATE = 3e-4
 GRAD_CLIP_NORM = 5.0
 
 # === checkpoint root ===
@@ -122,9 +122,17 @@ def stft_mag_tf(wav_batch):
     return mag[..., tf.newaxis]         # [B, F, T, 1]
 
 def log1p_mse(pred, target):
-    pred = tf.maximum(pred, 0.0)
-    target = tf.maximum(target, 0.0)
-    return tf.reduce_mean(tf.square(tf.math.log1p(pred) - tf.math.log1p(target)))
+    EPS = 1e-7
+    MAX_MAG = 1e4  # 或 1e3 視資料而定
+
+    pred = tf.clip_by_value(pred, 0.0, MAX_MAG)
+    target = tf.clip_by_value(target, 0.0, MAX_MAG)
+
+    return tf.reduce_mean(
+        tf.square(
+            tf.math.log1p(pred + EPS) - tf.math.log1p(target + EPS)
+        )
+    )
 
 def loss_on_latest_frames(pred, target):
     return log1p_mse(pred[:, :, -LOSS_FRAMES:, :], target[:, :, -LOSS_FRAMES:, :])
@@ -149,7 +157,7 @@ def train_step_batched(noisy_mag, clean_mag):
         loss = loss_on_latest_frames(pred, clean_mag)
     grads = tape.gradient(loss, model.trainable_variables)
     grad_norm = tf.linalg.global_norm([g for g in grads if g is not None])
-    grads = [tf.clip_by_norm(g, GRAD_CLIP_NORM) if g is not None else None for g in grads]
+    grads, _ = tf.clip_by_global_norm(grads, GRAD_CLIP_NORM)
     optimizer.apply_gradients(zip(grads, model.trainable_variables))
     return loss, grad_norm
 

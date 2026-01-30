@@ -26,6 +26,9 @@ def main():
     # ★ LSTM 使用 resource variables
     converter.experimental_enable_resource_variables = True
 
+    # 避免 TensorList / While 在降階時造成 shape 錯誤
+    converter._experimental_lower_tensor_list_ops = False
+
     # （先不要量化，確保能轉）
     tflite_model = converter.convert()
 

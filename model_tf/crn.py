@@ -45,7 +45,9 @@ class CausalConvBlock(layers.Layer):
             name=f'{self.name}_conv' if self.name else None
         )
         self.norm = layers.BatchNormalization(
-            axis=-1,  # channels_last
+            axis=-1,
+            momentum=0.9,        # 🔴 降低動量，讓統計量更新更穩
+            epsilon=1e-5,        # 🔴 提高數值穩定性
             name=f'{self.name}_bn' if self.name else None
         )
         self.activation = layers.ELU()
@@ -96,6 +98,8 @@ class CausalTransConvBlock(layers.Layer):
         )
         self.norm = layers.BatchNormalization(
             axis=-1,
+            momentum=0.9,        # 🔴 降低動量，讓統計量更新更穩
+            epsilon=1e-5,        # 🔴 提高數值穩定性
             name=f'{self.name}_bn' if self.name else None
         )
         if self.is_last:
