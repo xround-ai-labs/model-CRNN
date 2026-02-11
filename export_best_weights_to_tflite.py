@@ -4,7 +4,8 @@
 Convert MiniCRN_Causal128 best.weights.h5 -> TFLite
 
 Usage:
-  python export_best_weights_to_tflite.py
+conda activate tf311
+python export_best_weights_to_tflite.py
 
 Notes:
 - This script reconstructs the model, loads Keras weights (.weights.h5),
@@ -20,7 +21,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import tensorflow as tf
 
 # ---------- Paths ----------
-WEIGHTS_PATH = "./checkpoints_tf/20260128-181411/best.weights.h5"
+WEIGHTS_PATH = "./checkpoints_tf/20260206-172754/best.weights.h5"
 OUT_TFLITE   = "./checkpoints_tf/crnn_keras.tflite"
 
 # ---------- Model / input shape (must match training) ----------
@@ -41,7 +42,7 @@ def build_model():
     model = MiniCRN_Causal128(n_fft=N_FFT)
     # Build by running a dummy forward pass (same as training)
     dummy = tf.zeros([1, F_BINS, CHUNK_FRAMES, 1], dtype=tf.float32)
-    _ = model(dummy, None, training=False)  # model returns (pred, states)
+    _ = model(dummy, training=False)  # model returns (pred, states)
     return model
 
 
@@ -62,7 +63,7 @@ def main():
         ]
     )
     def serve(noisy_mag):
-        pred, _ = model(noisy_mag, None, training=False)
+        pred = model(noisy_mag, training=False)
         return {"pred": pred}
 
     concrete_fn = serve.get_concrete_function()
@@ -80,7 +81,9 @@ def main():
     # If you previously dealt with TensorList lowering issues, you can toggle this:
     # - True: try to lower TensorList ops (sometimes helps, sometimes breaks)
     # - False: keep TensorList (often forces SELECT_TF_OPS)
-    converter._experimental_lower_tensor_list_ops = False
+    converter.target_spec.supported_ops = [
+        tf.lite.OpsSet.TFLITE_BUILTINS,
+    ]
 
     # Optional: basic optimization (keeps float32 unless you add quantization)
     converter.optimizations = [tf.lite.Optimize.DEFAULT]

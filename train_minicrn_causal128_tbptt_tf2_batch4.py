@@ -36,10 +36,12 @@ TRAIN_CHUNKS_PER_UTT = 16
 BATCH_SIZE = 4  # requested
 
 # ===================== Dataset ===============================
-TRAIN_LIST_TXT = "./dataset_lists/train_vctk_pairs.txt"
-VAL_LIST_TXT   = "./dataset_lists/val_vctk_pairs.txt"
+# TRAIN_LIST_TXT = "./dataset_lists/train_vctk_pairs.txt"
+# VAL_LIST_TXT   = "./dataset_lists/val_vctk_pairs.txt"
+TRAIN_LIST_TXT = "./dataset_lists/train_dns3_pairs.txt"
+VAL_LIST_TXT   = "./dataset_lists/val_dns3_pairs.txt"
 
-SAMPLE_RATE = 16000
+SAMPLE_RATE = 25000
 N_FFT = 100
 HOP_LENGTH = 25
 
@@ -49,7 +51,7 @@ SEG_SAMPLES = (CHUNK_FRAMES - 1) * HOP_LENGTH + N_FFT
 HOP_SAMPLES = CHUNK_HOP_FRAMES * HOP_LENGTH
 
 # ===================== Training ==============================
-EPOCHS = 50
+EPOCHS = 500
 LEARNING_RATE = 3e-4
 GRAD_CLIP_NORM = 5.0
 
@@ -153,7 +155,7 @@ def train_step_batched(noisy_mag, clean_mag):
     LSTM states are reset per chunk (states=None) to enable batching.
     """
     with tf.GradientTape() as tape:
-        pred, _ = model(noisy_mag, None, training=False)
+        pred = model(noisy_mag, training=False)
         loss = loss_on_latest_frames(pred, clean_mag)
     grads = tape.gradient(loss, model.trainable_variables)
     grad_norm = tf.linalg.global_norm([g for g in grads if g is not None])
@@ -188,7 +190,7 @@ def eval_utterance_loss(noisy, clean, n_chunks=8, seed=0):
             c_tf = tf.convert_to_tensor(np.stack(bc, axis=0), tf.float32)
             n_mag = stft_mag_tf(n_tf)
             c_mag = stft_mag_tf(c_tf)
-            pred, _ = model(n_mag, None, training=False)
+            pred = model(n_mag, training=False)
             v = float(loss_on_latest_frames(pred, c_mag).numpy())
             vlosses.append(v)
             bn, bc = [], []
@@ -199,7 +201,7 @@ def eval_utterance_loss(noisy, clean, n_chunks=8, seed=0):
         c_tf = tf.convert_to_tensor(np.stack(bc, axis=0), tf.float32)
         n_mag = stft_mag_tf(n_tf)
         c_mag = stft_mag_tf(c_tf)
-        pred, _ = model(n_mag, None, training=False)
+        pred = model(n_mag, training=False)
         v = float(loss_on_latest_frames(pred, c_mag).numpy())
         vlosses.append(v)
 

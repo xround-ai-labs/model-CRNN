@@ -5,6 +5,7 @@
 Generate a raw .bin file for the *current* TensorFlow MiniCRN_Causal128 model.
 
 Usage example:
+conda activate tf311
 python gen_minicrn_tf_input_bin.py --out ./minicrn_tf_input.bin --mode white --seed 1234
 
 Output:
@@ -98,7 +99,10 @@ def main():
 
     mag = stft_mag_tf(tf.convert_to_tensor(wav)).numpy()
 
-    assert mag.shape == (1, FREQ_BINS, CHUNK_FRAMES, 1), mag.shape
+    if mag.shape != (1, FREQ_BINS, CHUNK_FRAMES, 1):
+        raise RuntimeError(
+            f"Unexpected STFT shape {mag.shape}, expected (1,{FREQ_BINS},{CHUNK_FRAMES},1)"
+        )
 
     out = mag.astype("<f4")  # float32 little-endian
 
