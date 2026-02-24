@@ -18,11 +18,15 @@ import tensorflow as tf
 from tqdm import tqdm
 import soundfile as sf
 import resampy
+import yaml
+
+from pesq import pesq
+from pystoi import stoi
 
 from model_tf import MiniCRN_Causal128
 
 # ===================== Streaming / TBPTT (chunk size in STFT frames) =====================
-CHUNK_FRAMES = 200
+CHUNK_FRAMES = 100
 CHUNK_HOP_FRAMES = 50
 LOSS_FRAMES = CHUNK_HOP_FRAMES
 
@@ -52,8 +56,8 @@ HOP_SAMPLES = CHUNK_HOP_FRAMES * HOP_LENGTH
 
 # ===================== Training ==============================
 EPOCHS = 500
-LEARNING_RATE = 3e-4
-GRAD_CLIP_NORM = 5.0
+LEARNING_RATE = 1e-4
+GRAD_CLIP_NORM = 2.0
 
 # === checkpoint root ===
 CKPT_ROOT = "./checkpoints_tf"
@@ -63,6 +67,42 @@ RUN_ID = time.strftime("%Y%m%d-%H%M%S")
 CKPT_DIR = os.path.join(CKPT_ROOT, RUN_ID)
 os.makedirs(CKPT_DIR, exist_ok=True)
 print(f"[Checkpoint] saving to: {CKPT_DIR}")
+
+# ===================== Save config ==========================
+config_dict = {
+    # Dataset
+    "TRAIN_LIST_TXT": TRAIN_LIST_TXT,
+    "VAL_LIST_TXT": VAL_LIST_TXT,
+
+    # Audio
+    "SAMPLE_RATE": SAMPLE_RATE,
+    "N_FFT": N_FFT,
+    "HOP_LENGTH": HOP_LENGTH,
+    "SEG_SAMPLES": SEG_SAMPLES,
+    "HOP_SAMPLES": HOP_SAMPLES,
+
+    # Chunk / TBPTT
+    "CHUNK_FRAMES": CHUNK_FRAMES,
+    "CHUNK_HOP_FRAMES": CHUNK_HOP_FRAMES,
+    "LOSS_FRAMES": LOSS_FRAMES,
+    "TRAIN_CHUNKS_PER_UTT": TRAIN_CHUNKS_PER_UTT,
+    "WARMUP_CHUNKS": WARMUP_CHUNKS,
+    "BATCH_SIZE": BATCH_SIZE,
+
+    # Training
+    "EPOCHS": EPOCHS,
+    "LEARNING_RATE": LEARNING_RATE,
+    "GRAD_CLIP_NORM": GRAD_CLIP_NORM,
+
+    # Model
+    "MODEL_NAME": "MiniCRN_Causal128",
+}
+
+config_path = os.path.join(CKPT_DIR, "config.yaml")
+with open(config_path, "w") as f:
+    yaml.dump(config_dict, f, sort_keys=False)
+
+print(f"[Config] saved to: {config_path}")
 
 # ===================== TensorBoard ==========================
 TB_RUN_DIR = os.path.join(CKPT_DIR, "log")
@@ -139,6 +179,143 @@ def log1p_mse(pred, target):
 def loss_on_latest_frames(pred, target):
     return log1p_mse(pred[:, :, -LOSS_FRAMES:, :], target[:, :, -LOSS_FRAMES:, :])
 
+# ===================== Tensorboard Parameters =====================
+
+def istft_reconstruct(mag, noisy_wav_batch):
+    """
+    mag: [B, F, T, 1]
+    noisy_wav_batch: [B, S]
+    return: reconstructed waveform [B, S]
+    """
+
+    # 取得 noisy phase
+    stft_noisy = tf.signal.stft(
+        noisy_wav_batch,
+        frame_length=N_FFT,
+        frame_step=HOP_LENGTH,
+        fft_length=N_FFT,
+        window_fn=tf.signal.hann_window,
+        pad_end=False,
+    )  # [B, T, F]
+
+    phase = tf.math.angle(stft_noisy)
+    phase = tf.transpose(phase, [0, 2, 1])  # [B, F, T]
+
+    mag = tf.squeeze(mag, axis=-1)          # [B, F, T]
+    j = tf.complex(tf.constant(0.0, tf.float32), tf.constant(1.0, tf.float32))
+    complex_spec = tf.cast(mag, tf.complex64) * tf.exp(j * tf.cast(phase, tf.complex64))
+
+    complex_spec = tf.transpose(complex_spec, [0, 2, 1])  # [B, T, F]
+
+    wav = tf.signal.inverse_stft(
+        complex_spec,
+        frame_length=N_FFT,
+        frame_step=HOP_LENGTH,
+        fft_length=N_FFT,
+        window_fn=tf.signal.hann_window,
+    )
+
+    return wav
+
+def si_snr(ref, est, eps=1e-8):
+    """
+    ref, est: numpy array [S]
+    """
+    ref = ref - np.mean(ref)
+    est = est - np.mean(est)
+
+    proj = np.sum(est * ref) * ref / (np.sum(ref**2) + eps)
+    noise = est - proj
+
+    ratio = (np.sum(proj**2) + eps) / (np.sum(noise**2) + eps)
+    return 10 * np.log10(ratio + eps)
+
+EVAL_SR = 16000
+METRIC_MIN_SEC = 2.0  # PESQ/STOI 建議至少 2 秒
+METRIC_MAX_CHUNKS = 32  # 避免太慢；2~3 秒通常夠了
+
+def _resample_1d(x, sr_from, sr_to):
+    if sr_from == sr_to:
+        return x.astype(np.float32)
+    return resampy.resample(x.astype(np.float32), sr_from, sr_to).astype(np.float32)
+
+def eval_metrics(noisy, clean, seed=0):
+    """
+    noisy/clean: numpy 1D, sr = SAMPLE_RATE (25k)
+    return: (si_snr_16k, stoi_16k, pesq_16k)
+    """
+    L = min(len(noisy), len(clean))
+    if L < SEG_SAMPLES:
+        return None
+
+    noisy = noisy[:L]
+    clean = clean[:L]
+
+    rngv = np.random.default_rng(seed)
+
+    # 估算需要幾個 chunk 才能湊到 >= METRIC_MIN_SEC
+    need_samples_25k = int(METRIC_MIN_SEC * SAMPLE_RATE)
+    # 每個 chunk iSTFT 出來的長度通常接近 SEG_SAMPLES（略有差）
+    est_chunks = int(np.ceil(need_samples_25k / float(SEG_SAMPLES)))
+    n_chunks = int(np.clip(est_chunks, 8, METRIC_MAX_CHUNKS))
+
+    starts = random_chunk_starts(L, SEG_SAMPLES, HOP_SAMPLES, n_chunks, rngv)
+    if not starts:
+        return None
+
+    est_pieces = []
+    clean_pieces = []
+
+    # 逐 chunk 推論 + iSTFT，然後串起來
+    for s in starts:
+        n_seg = noisy[s:s+SEG_SAMPLES]
+        c_seg = clean[s:s+SEG_SAMPLES]
+
+        n_tf = tf.convert_to_tensor(n_seg[None, :], tf.float32)  # [1, S]
+        n_mag = stft_mag_tf(n_tf)                                 # [1, F, T, 1]
+        pred_mag = model(n_mag, training=False)                   # [1, F, T, 1]
+
+        est_25k = istft_reconstruct(pred_mag, n_tf)[0].numpy()
+
+        # 對齊單 chunk 長度
+        M = min(len(est_25k), len(c_seg))
+        if M <= 0:
+            continue
+
+        est_pieces.append(est_25k[:M])
+        clean_pieces.append(c_seg[:M])
+
+        # 已湊夠長度就停（省時間）
+        if sum(len(x) for x in est_pieces) >= need_samples_25k:
+            break
+
+    if not est_pieces:
+        return None
+
+    est_25k = np.concatenate(est_pieces, axis=0)
+    clean_25k = np.concatenate(clean_pieces, axis=0)
+
+    # resample 到 16k 算 metrics
+    est_16k = _resample_1d(est_25k, SAMPLE_RATE, EVAL_SR)
+    clean_16k = _resample_1d(clean_25k, SAMPLE_RATE, EVAL_SR)
+
+    # 再對齊一次（resample 後可能差 1~2 samples）
+    M2 = min(len(est_16k), len(clean_16k))
+    if M2 <= 0:
+        return None
+    est_16k = est_16k[:M2]
+    clean_16k = clean_16k[:M2]
+
+    si = si_snr(clean_16k, est_16k)
+    st = stoi(clean_16k, est_16k, EVAL_SR, extended=False)
+
+    try:
+        pe = pesq(EVAL_SR, clean_16k, est_16k, 'wb')  # 16k 用 wb
+    except Exception:
+        pe = np.nan
+
+    return float(si), float(st), float(pe)
+
 # ===================== Model ================================
 model = MiniCRN_Causal128(n_fft=N_FFT)
 dummy = tf.zeros([1, N_FFT // 2 + 1, CHUNK_FRAMES, 1], tf.float32)
@@ -161,6 +338,14 @@ def train_step_batched(noisy_mag, clean_mag):
     grad_norm = tf.linalg.global_norm([g for g in grads if g is not None])
     grads, _ = tf.clip_by_global_norm(grads, GRAD_CLIP_NORM)
     optimizer.apply_gradients(zip(grads, model.trainable_variables))
+
+    tf.debugging.assert_all_finite(noisy_mag, "noisy_mag has NaN/Inf")
+    tf.debugging.assert_all_finite(clean_mag, "clean_mag has NaN/Inf")
+    pred = model(noisy_mag, training=True)
+    tf.debugging.assert_all_finite(pred, "pred has NaN/Inf")
+    loss = loss_on_latest_frames(pred, clean_mag)
+    tf.debugging.assert_all_finite(loss, "loss is NaN/Inf")
+
     return loss, grad_norm
 
 def eval_utterance_loss(noisy, clean, n_chunks=8, seed=0):
@@ -278,13 +463,29 @@ for epoch in range(1, EPOCHS + 1):
     VAL_MAX_UTTS = min(50, len(val_pairs))
     VAL_CHUNKS_PER_UTT = 8
     vls = []
+    si_scores = []
+    stoi_scores = []
+    pesq_scores = []
+
     for noisy_p, clean_p in val_pairs[:VAL_MAX_UTTS]:
         noisy_v = load_wav_resample(noisy_p, SAMPLE_RATE)
         clean_v = load_wav_resample(clean_p, SAMPLE_RATE)
+
+        m = eval_metrics(noisy_v, clean_v)
+        if m is not None:
+            si, st, pe = m
+            si_scores.append(si)
+            stoi_scores.append(st)
+            pesq_scores.append(pe)
+
         v = eval_utterance_loss(noisy_v, clean_v, n_chunks=VAL_CHUNKS_PER_UTT, seed=epoch)
         if v is not None and np.isfinite(v):
             vls.append(v)
     val_loss = float(np.mean(vls)) if len(vls) > 0 else float("nan")
+
+    mean_si   = float(np.nanmean(si_scores))   if len(si_scores)   else float("nan")
+    mean_stoi = float(np.nanmean(stoi_scores)) if len(stoi_scores) else float("nan")
+    mean_pesq = float(np.nanmean(pesq_scores)) if len(pesq_scores) else float("nan")
 
     print(f"Epoch {epoch} | train_loss={train_loss:.6f} | val_loss={val_loss:.6f}")
 
@@ -297,6 +498,9 @@ for epoch in range(1, EPOCHS + 1):
     if np.isfinite(val_loss):
         with tb_val_writer.as_default():
             tf.summary.scalar("loss", val_loss, step=epoch)
+            tf.summary.scalar("SI-SNR", mean_si, step=epoch)
+            tf.summary.scalar("STOI", mean_stoi, step=epoch)
+            tf.summary.scalar("PESQ", mean_pesq, step=epoch)
 
     # ===== epoch checkpoint =====
     epoch_ckpt_path = os.path.join(CKPT_DIR, f"epoch{epoch:03d}.weights.h5")

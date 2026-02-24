@@ -26,7 +26,7 @@ from pathlib import Path
 SAMPLE_RATE = 16000
 N_FFT = 100
 HOP_LENGTH = 25
-CHUNK_FRAMES = 200
+CHUNK_FRAMES = 100
 FREQ_BINS = N_FFT // 2 + 1   # 51
 
 

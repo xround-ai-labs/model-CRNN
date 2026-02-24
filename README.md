@@ -40,7 +40,7 @@ Check out the README of [Wave-U-Net for SE](https://github.com/haoxiangsnr/Wave-
 - TensorBoard:
 ```
 conda activate tb
-tensorboard --logdir=checkpoints_tf/20260128-181411
+tensorboard --logdir=checkpoints_tf/20260212-112502/log
 ```
 ```
 conda activate crnn

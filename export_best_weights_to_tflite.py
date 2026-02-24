@@ -21,14 +21,14 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import tensorflow as tf
 
 # ---------- Paths ----------
-WEIGHTS_PATH = "./checkpoints_tf/20260206-172754/best.weights.h5"
-OUT_TFLITE   = "./checkpoints_tf/crnn_keras.tflite"
+WEIGHTS_PATH = "./checkpoints_tf/20260212-112502/best.weights.h5"
+OUT_TFLITE   = "./checkpoints_tf/20260212-112502/crnn_keras.tflite"
 
 # ---------- Model / input shape (must match training) ----------
 # From your training script:
 SAMPLE_RATE = 16000
 N_FFT = 100
-CHUNK_FRAMES = 200
+CHUNK_FRAMES = 100
 
 # TF STFT magnitude used in training produces F = N_FFT//2 + 1
 F_BINS = N_FFT // 2 + 1

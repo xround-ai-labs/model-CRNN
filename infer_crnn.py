@@ -1,12 +1,18 @@
 
 """
 python infer_crnn.py \
+  --input_dir /home/user/hdd/test_waves/vctk_test \
+  --output_dir crnn_keras \
+  --sample_rate 25000 \
+  --backend keras \
+  --weights /home/user/Documents/ai-training/model-CRNN/checkpoints_tf/20260212-112502/best.weights.h5
+
+python infer_crnn.py \
   --input_dir /home/user/Documents/ai-training/gtcrn/test_wavs/remixed_XR_24k/ \
   --output_dir crnn_keras \
-  --sample_rate 16000 \
+  --sample_rate 25000 \
   --backend keras \
-  --weights /home/user/Documents/ai-training/model-CRNN/checkpoints_tf/20260206-172754/best.weights.h5
-
+  --weights /home/user/Documents/ai-training/model-CRNN/checkpoints_tf/20260212-112502/best.weights.h5
   
 python infer_crnn.py \
   --input_dir /home/user/Documents/ai-training/gtcrn/test_wavs/remixed_XR_24k/ \
@@ -164,26 +170,32 @@ def run_crn_pipeline(backend, wav_1d):
     wav_1d = wav_1d.astype(np.float32)
     orig_len = len(wav_1d)
 
-    if orig_len < SEG_SAMPLES:
-        wav_1d = np.pad(wav_1d, (0, SEG_SAMPLES - orig_len))
+    hop_samples = SEG_SAMPLES // 2  # 50% overlap
+    out = np.zeros(len(wav_1d) + SEG_SAMPLES, dtype=np.float32)
+    weight = np.zeros_like(out)
 
-    n_chunks = int(np.ceil(len(wav_1d) / SEG_SAMPLES))
-    out_chunks = []
+    window = np.hanning(SEG_SAMPLES).astype(np.float32)
 
-    for i in range(n_chunks):
-        seg = wav_1d[i * SEG_SAMPLES : (i + 1) * SEG_SAMPLES]
+    for start in range(0, len(wav_1d), hop_samples):
+        end = start + SEG_SAMPLES
+        seg = wav_1d[start:end]
+
         if len(seg) < SEG_SAMPLES:
             seg = np.pad(seg, (0, SEG_SAMPLES - len(seg)))
 
         mag_4d, phase = wav_to_mag_phase(seg)
-
         est_mag_4d = backend.infer_mag(mag_4d)
-
         seg_out = mag_phase_to_wav(est_mag_4d, phase)
-        out_chunks.append(seg_out[:SEG_SAMPLES])
 
-    wav_out = np.concatenate(out_chunks, axis=0)
-    return wav_out[:orig_len]
+        seg_out = seg_out[:SEG_SAMPLES] * window
+
+        out[start:start+SEG_SAMPLES] += seg_out
+        weight[start:start+SEG_SAMPLES] += window
+
+    weight[weight == 0] = 1.0
+    out /= weight
+
+    return out[:orig_len]
 
 # ============================================================
 # Main
