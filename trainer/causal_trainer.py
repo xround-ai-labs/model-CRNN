@@ -24,7 +24,7 @@ class Trainer(BaseTrainer):
             noisy = noisy.to(self.device).unsqueeze(1)  # [B, F, T] => [B, 1, F, T]
             clean = clean.to(self.device).unsqueeze(1)  # [B, F, T] => [B, 1, F, T]
 
-            enhanced = self.model(noisy)  # [B, 1, F, T]
+            enhanced, _ = self.model(noisy)  # [B, 1, F, T]
 
             loss = self.loss_function(enhanced, clean, n_frames_list, self.device)
             loss.backward()

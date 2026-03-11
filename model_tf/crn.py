@@ -143,7 +143,7 @@ class MiniCRN_Causal128(Model):
         self,
         n_fft: int = 100,
         hidden_size: int = 64,
-        num_lstm_layers: int = 2,
+        num_lstm_layers: int = 1,
         name: str = "MiniCRN_Causal128",
     ):
         super().__init__(name=name)

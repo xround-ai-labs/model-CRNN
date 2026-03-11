@@ -13,9 +13,9 @@
             "find_max": true,
             "custom": {
                 "visualization_limit": 20,
-                "n_fft": 100,
-                "win_length": 100,
-                "hop_length": 25
+                "n_fft": 256,
+                "win_length": 128,
+                "hop_length": 64
             }
         }
     },
@@ -42,8 +42,8 @@
             "limit": null,
             "offset": 0,
             "sr": 24000,
-            "n_fft": 100,
-            "hop_length": 25,
+            "n_fft": 256,
+            "hop_length": 64,
             "train": true
         }
     },
@@ -55,8 +55,8 @@
             "limit": null,
             "offset": 0,
             "sr": 24000,
-            "n_fft": 100,
-            "hop_length": 25,
+            "n_fft": 256,
+            "hop_length": 64,
             "train": false
         },
     },

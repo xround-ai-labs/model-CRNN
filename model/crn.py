@@ -237,17 +237,17 @@ class MiniCRN_Causal(nn.Module):
         return out
 
 class MiniCRN_Causal128(nn.Module):
-    def __init__(self, n_fft=100):
+    def __init__(self, n_fft=256):
         super().__init__()
         self.freq_bins = n_fft // 2 + 1
 
-        lstm_size = 72
+        lstm_size = 128
 
         # ===== Encoder (Causal) =====
-        self.enc1 = CausalConvBlock(1, 16)
-        self.enc2 = CausalConvBlock(16, 24)
-        self.enc3 = CausalConvBlock(24, 48)
-        self.enc4 = CausalConvBlock(48, lstm_size)
+        self.enc1 = CausalConvBlock(1, 32)
+        self.enc2 = CausalConvBlock(32, 64)
+        self.enc3 = CausalConvBlock(64, 128)
+        self.enc4 = CausalConvBlock(128, lstm_size)
 
         # ===== LSTM =====
         self.hidden_size = lstm_size
@@ -270,9 +270,9 @@ class MiniCRN_Causal128(nn.Module):
         )
 
         # ===== Decoder (Causal) =====
-        self.dec1 = CausalTransConvBlock(lstm_size, 48)   # 注意：Decoder 第一層 input 要接 LSTM hidden_size
-        self.dec2 = CausalTransConvBlock(48, 24)
-        self.dec3 = CausalTransConvBlock(24, 1, is_last=True)
+        self.dec1 = CausalTransConvBlock(lstm_size, 128)   # 注意：Decoder 第一層 input 要接 LSTM hidden_size
+        self.dec2 = CausalTransConvBlock(128, 64)
+        self.dec3 = CausalTransConvBlock(64, 1, is_last=True)
 
     def forward(self, x, lstm_state=None):
         """
@@ -334,14 +334,14 @@ class MiniCRN_Causal128(nn.Module):
         return out, lstm_state
 
 if __name__ == "__main__":
-    model = MiniCRN_Causal128(n_fft=100)
-    x = torch.randn(2, 1, 51, 200)
+    model = MiniCRN_Causal128(n_fft=256)
+    x = torch.randn(2, 1, 127, 200)
     y = model(x)
     print("input:", x.shape)
-    print("output:", y.shape)
+    print("output:", y)
 
     with torch.no_grad():
-        x = torch.randn(2, 1, 51, 200)
+        x = torch.randn(2, 1, 127, 200)
         e4 = model.enc4(model.enc3(model.enc2(model.enc1(x))))
         print(e4.shape)  # 看 F'
 

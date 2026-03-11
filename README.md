@@ -10,6 +10,13 @@ A minimum unofficial implementation of the [A Convolutional Recurrent Neural Net
 
 ## Usage
 
+```
+conda create -n crnn python=3.10 -y
+conda activate crnn
+python -m pip install --upgrade pip
+pip install torch torchvision torchaudio numpy json5 pesq pystoi librosa==0.7.0 tensorboard matplotlib tqdm
+```
+
 - Training:
 
 ```
